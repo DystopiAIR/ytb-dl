@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+python-multipart
+yt-dlp
+jinja2
+humanize

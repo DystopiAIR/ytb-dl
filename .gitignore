@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv/
+
+# 下载的视频文件
+downloads/
+*.mp4
+
+# 项目特定文件
+video_info.json
+

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .delete-button:active {
+            transform: translateY(2px); /* 下沉效果 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 标题部分 -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">YouTube Video Downloader</h1>
+            <p class="text-gray-600">输入YouTube视频链接开始下载</p>
+        </div>
+
+        <!-- 下载表单 -->
+        <div class="max-w-xl mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex space-x-4">
+                <input type="text" id="url-input" 
+                       class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                       placeholder="https://www.youtube.com/watch?v=...">
+                <button onclick="downloadVideo()" 
+                        class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    下载
+                </button>
+            </div>
+            <div id="download-status" class="mt-4 text-center text-gray-600 hidden">
+                正在下载中...
+            </div>
+            <div id="progress-bar" class="w-full bg-gray-200 rounded-full h-2.5 mt-2 hidden">
+                <div id="progress" class="bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- 视频列表 -->
+        <div class="flex flex-wrap gap-8">
+            {% for video in videos %}
+            <div class="bg-white rounded-lg shadow-md overflow-hidden w-64 mb-8 relative">
+                <video class="w-full h-36 object-contain" controls>
+                    <source src="{{ video.local_path }}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="p-4">
+                    <h3 class="text-lg font-semibold mb-2">{{ video.title[:20] }}{% if video.title|length > 20 %}...{% endif %}</h3>
+                    <div class="text-sm text-gray-600 space-y-1">
+                        <p>大小: {{ video.filesize }}</p>
+                        <p>下载时间: {{ video.download_time }}</p>
+                    </div>
+                    <button class="delete-button bg-red-500 text-white px-2 py-1 rounded mt-4 w-full" data-path="{{ video.local_path }}">删除</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const deleteButtons = document.querySelectorAll('.delete-button');
+            deleteButtons.forEach(button => {
+                button.addEventListener('click', function(event) {
+                    event.stopPropagation(); // 阻止事件冒泡
+                    const localPath = this.getAttribute('data-path');
+                    deleteVideo(localPath);
+                });
+            });
+        });
+
+        async function downloadVideo() {
+            const urlInput = document.getElementById('url-input');
+            const statusDiv = document.getElementById('download-status');
+            const progressBar = document.getElementById('progress-bar');
+            const progress = document.getElementById('progress');
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                alert('请输入视频URL');
+                return;
+            }
+
+            // 显示下载状态和进度条
+            statusDiv.classList.remove('hidden');
+            progressBar.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                if (response.ok) {
+                    // 轮询检查下载状态
+                    const checkStatus = setInterval(async () => {
+                        const progressResponse = await fetch(`/progress?url=${encodeURIComponent(url)}`);
+                        const progressData = await progressResponse.json();
+                        console.log('Progress:', progressData.progress); // 添加调试信息
+                        progress.style.width = `${progressData.progress}%`;
+                        
+                        if (progressData.progress >= 100) {
+                            clearInterval(checkStatus);
+                            statusDiv.classList.add('hidden');
+                            progressBar.classList.add('hidden');
+                            location.reload(); // 刷新页面显示新下载的视频
+                        }
+                    }, 1000);
+                } else {
+                    throw new Error('下载失败');
+                }
+            } catch (error) {
+                statusDiv.textContent = `错误: ${error.message}`;
+                statusDiv.classList.add('text-red-500');
+            }
+        }
+
+        async function deleteVideo(localPath) {
+            console.log('Attempting to delete video:', localPath);
+            if (confirm('确定要删除这个视频吗？')) {
+                try {
+                    const response = await fetch('/delete', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ local_path: localPath })
+                    });
+
+                    if (response.ok) {
+                        console.log('Video deleted successfully');
+                        location.reload(); // 删除成功后刷新页面
+                    } else {
+                        console.error('Failed to delete video');
+                        alert('删除失败');
+                    }
+                } catch (error) {
+                    console.error('Error during deletion:', error);
+                    alert('删除过程中出现错误');
+                }
+            }
+        }
+    </script>
+</body>
+</html> 
